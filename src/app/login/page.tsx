@@ -1,118 +1,208 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+
+export const dynamic = "force-dynamic";       // do not prerender this route
+export const fetchCache = "force-no-store";   // optional: avoid caching on login pages
+
+import React, { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Eye, EyeOff, Activity, AlertCircle, Loader2, User, Lock } from "lucide-react";
+import { Lock, Eye, EyeOff, TrendingUp, AlertCircle, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 
+/** Top-level page wraps the form (which calls useSearchParams) in Suspense */
 export default function LoginPage() {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPw,   setShowPw]   = useState(false);
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState("");
-  const router       = useRouter();
-  const searchParams = useSearchParams();
-  const ref          = useRef<HTMLInputElement>(null);
+  return (
+    <Suspense fallback={<LoginSkeleton />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
 
-  useEffect(() => { ref.current?.focus(); }, []);
+/** Lightweight fallback while client boundary hydrates */
+function LoginSkeleton() {
+  return (
+    <div className="min-h-screen bg-app-bg flex items-center justify-center p-4">
+      <div className="relative w-full max-w-sm">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-trading-green/10 border border-trading-green/30 mb-4" />
+          <div className="h-4 w-40 mx-auto bg-panel-bg rounded mb-2" />
+          <div className="h-3 w-52 mx-auto bg-panel-bg rounded opacity-70" />
+        </div>
+        <div className="tp-card p-6">
+          <div className="h-4 w-56 bg-panel-bg rounded mb-6" />
+          <div className="space-y-4">
+            <div className="h-10 w-full bg-panel-bg rounded" />
+            <div className="h-10 w-full bg-panel-bg rounded" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Actual login form: safe place to use useSearchParams() */
+function LoginForm() {
+  const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const router = useRouter();
+  const searchParams = useSearchParams();      // <-- safe inside Suspense
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    if (!username.trim() || !password.trim()) { setError("Enter both username and password."); return; }
-    setLoading(true); setError("");
+    if (!password.trim()) {
+      setError("Please enter your password.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
     try {
-      const res  = await fetch("/api/auth/login", {
+      const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: username.trim(), password }),
+        body: JSON.stringify({ password }),
       });
+
       const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "Login failed."); setPassword(""); return; }
-      toast.success(`Welcome, ${data.user?.displayName ?? username}!`);
-      router.push(searchParams.get("from") ?? "/");
+
+      if (!res.ok) {
+        setError(data?.error ?? "Login failed. Please try again.");
+        setPassword("");
+        inputRef.current?.focus();
+        return;
+      }
+
+      toast.success("Welcome back! Loading your dashboard...");
+      const from = searchParams.get("from") ?? "/";
+      router.push(from);
       router.refresh();
-    } catch { setError("Network error. Check your connection."); }
-    finally  { setLoading(false); }
+    } catch {
+      setError("Network error. Please check your connection.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
-    <div className="min-h-screen bg-[#060b0f] flex flex-col items-center justify-center p-5 overflow-y-auto"
-      style={{ paddingTop: "env(safe-area-inset-top, 20px)", paddingBottom: "env(safe-area-inset-bottom, 20px)" }}>
+    <div className="min-h-screen bg-app-bg flex items-center justify-center p-4">
+      {/* Background grid decoration */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div
+          className="absolute inset-0 opacity-[0.03]"
+          style={{
+            backgroundImage:
+              "linear-gradient(#00d97e 1px, transparent 1px), linear-gradient(90deg, #00d97e 1px, transparent 1px)",
+            backgroundSize: "40px 40px",
+          }}
+        />
+      </div>
 
-      {/* Grid bg */}
-      <div className="fixed inset-0 opacity-[0.25] pointer-events-none"
-        style={{ backgroundImage: "linear-gradient(#1a2535 1px,transparent 1px),linear-gradient(90deg,#1a2535 1px,transparent 1px)", backgroundSize: "44px 44px" }} />
-      <div className="fixed w-80 h-80 rounded-full pointer-events-none"
-        style={{ background: "radial-gradient(circle,rgba(0,217,126,0.09) 0%,transparent 70%)", top: "35%", left: "50%", transform: "translate(-50%,-50%)" }} />
-
-      <div className="relative z-10 w-full max-w-sm">
-        {/* Brand */}
-        <div className="text-center mb-7">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#00d97e]/10 border border-[#00d97e]/30 mb-4">
-            <Activity className="w-7 h-7 text-[#00d97e]" />
+      <div className="relative w-full max-w-sm">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-trading-green/10 border border-trading-green/30 mb-4">
+            <TrendingUp className="w-7 h-7 text-trading-green" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">
-            Trade<span className="text-[#00d97e]">Pulse</span>
+          <h1 className="font-display text-2xl font-bold text-primary-text">
+            Trade<span className="text-trading-green">Pulse</span>
           </h1>
-          <p className="text-sm text-[#94a3b8] mt-1">Indian trading intelligence platform</p>
+          <p className="text-sm text-muted-text mt-1">Your personal trading brain</p>
         </div>
 
-        {/* Trial badge */}
-        <div className="bg-[#6366f1]/10 border border-[#6366f1]/25 rounded-xl p-3 text-center mb-5">
-          <p className="text-sm font-semibold text-[#6366f1]">🎁 30-Day Free Trial</p>
-          <p className="text-xs text-[#94a3b8] mt-0.5">Full access · No credit card · Then ₹2,000/month</p>
-        </div>
-
-        {/* Card */}
-        <div className="bg-[#0c1117] border border-[#243040] rounded-2xl p-5">
-          {error && (
-            <div className="flex items-center gap-2 bg-[#ff4560]/10 border border-[#ff4560]/30 rounded-xl px-3 py-2.5 mb-4">
-              <AlertCircle className="w-4 h-4 text-[#ff4560] flex-shrink-0" />
-              <p className="text-xs text-[#ff4560]">{error}</p>
-            </div>
-          )}
+        {/* Login card */}
+        <div className="tp-card p-6">
+          <div className="flex items-center gap-2 mb-6">
+            <Lock className="w-4 h-4 text-muted-text" />
+            <span className="text-sm font-medium text-secondary-text">
+              Enter your password to continue
+            </span>
+          </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
+            {/* Password field */}
             <div>
-              <label className="block text-[11px] text-[#94a3b8] uppercase tracking-wider mb-2 font-semibold">Username</label>
+              <label className="block text-xs text-muted-text mb-1.5 font-medium uppercase tracking-wider">
+                Password
+              </label>
               <div className="relative">
-                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#4a5568]" />
-                <input ref={ref} type="text" value={username}
-                  onChange={e => { setUsername(e.target.value); setError(""); }}
-                  placeholder="your username" disabled={loading}
-                  autoComplete="username" inputMode="text"
-                  className="w-full bg-[#060b0f] border border-[#243040] rounded-xl pl-10 pr-4 py-3.5 text-[15px] text-white placeholder:text-[#4a5568] focus:outline-none focus:border-[#00d97e]/50 focus:ring-2 focus:ring-[#00d97e]/10 transition-all disabled:opacity-50" />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-[11px] text-[#94a3b8] uppercase tracking-wider mb-2 font-semibold">Password</label>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#4a5568]" />
-                <input type={showPw ? "text" : "password"} value={password}
-                  onChange={e => { setPassword(e.target.value); setError(""); }}
-                  placeholder="••••••••" disabled={loading}
-                  autoComplete="current-password"
-                  className="w-full bg-[#060b0f] border border-[#243040] rounded-xl pl-10 pr-11 py-3.5 text-[15px] text-white placeholder:text-[#4a5568] focus:outline-none focus:border-[#00d97e]/50 focus:ring-2 focus:ring-[#00d97e]/10 transition-all disabled:opacity-50 mono tracking-widest" />
-                <button type="button" tabIndex={-1} onClick={() => setShowPw(!showPw)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#4a5568] hover:text-[#94a3b8]">
+                <input
+                  ref={inputRef}
+                  type={showPw ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setError("");
+                  }}
+                  placeholder="Enter your password"
+                  disabled={loading}
+                  className="w-full bg-panel-bg border border-border-color rounded-lg px-4 py-3 pr-10 text-sm text-primary-text placeholder:text-muted-text/50 focus:outline-none focus:border-trading-green/50 focus:ring-1 focus:ring-trading-green/30 transition-all disabled:opacity-50 font-mono tracking-widest"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPw((s) => !s)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-text hover:text-secondary-text transition-colors"
+                  tabIndex={-1}
+                >
                   {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
-            <button type="submit" disabled={loading || !username.trim() || !password.trim()}
-              className="w-full bg-[#00d97e] hover:bg-[#00f290] active:scale-[0.98] text-[#060b0f] font-bold py-3.5 rounded-xl text-[15px] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed mt-1">
-              {loading
-                ? <><Loader2 className="w-4 h-4 animate-spin" />Signing in...</>
-                : <><Lock className="w-4 h-4" />Sign In</>}
+            {/* Error message */}
+            {error && (
+              <div className="flex items-center gap-2 bg-trading-red/10 border border-trading-red/30 rounded-lg px-3 py-2.5">
+                <AlertCircle className="w-4 h-4 text-trading-red flex-shrink-0" />
+                <p className="text-xs text-trading-red">{error}</p>
+              </div>
+            )}
+
+            {/* Login button */}
+            <button
+              type="submit"
+              disabled={loading || !password.trim()}
+              className="w-full bg-trading-green/90 hover:bg-trading-green text-app-bg font-semibold py-3 rounded-lg text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Logging in...
+                </>
+              ) : (
+                <>
+                  <Lock className="w-4 h-4" />
+                  Unlock TradePulse
+                </>
+              )}
             </button>
           </form>
+
+          {/* Hint */}
+          <p className="text-center text-xs text-muted-text mt-4">
+            Default password:{" "}
+            <code className="bg-card-bg px-1.5 py-0.5 rounded text-accent-indigo font-mono">
+              tradepulse123
+            </code>
+          </p>
+          <p className="text-center text-xs text-muted-text mt-1">
+            Change it in <code className="font-mono">.env.local</code> via{" "}
+            <code className="font-mono">APP_PASSWORD</code>
+          </p>
         </div>
 
-        <p className="text-center text-xs text-[#4a5568] mt-4">
-          🔒 HTTP-only session cookies · 7-day session
-        </p>
+        {/* Security note */}
+        <div className="mt-4 text-center">
+          <p className="text-xs text-muted-text">
+            🔒 Protected with HTTP-only session cookies. Session lasts 7 days.
+          </p>
+        </div>
       </div>
     </div>
   );
